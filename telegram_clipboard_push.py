@@ -161,29 +161,40 @@ def send_file_or_fallback(path: str):
             with open(path, "rb") as f:
                 resp = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f}, timeout=60)
                 if resp.status_code == 400:
-                    send_file_via_transfersh(path)
+                    send_file_via_gofile(path)
         except Exception as e:
             print(f"[Telegram] Exception sending file: {e}")
     else:
-        send_file_via_transfersh(path)
+        send_file_via_gofile(path)
 
-def send_file_via_transfersh(path: str):
-    """Upload a file to transfer.sh and share the download link via Telegram.
+def send_file_via_gofile(file_path: str):
+    """Upload a file to gofile and share the download link via Telegram.
 
-    This function sends the specified file to transfer.sh and, if successful,
+    This function sends the specified file to gofile and, if successful,
     posts a message to Telegram containing the generated download URL.
 
     Args:
         path: The filesystem path to the file that should be uploaded.
     """
-    filename = os.path.basename(path)
+    filename = os.path.basename(file_path)
+
+    url = "https://upload.gofile.io/uploadfile"
+
     try:
-        with open(path, "rb") as f:
-            resp = requests.put(f"https://transfer.sh/{filename}", data=f, timeout=120)
-        if resp.status_code == 200:
-            send_text(f"File too large for Telegram; download from:\n{resp.text.strip()}")
+        with open(file_path, "rb") as f:
+            files = {"file": (filename, f)}
+            response = requests.post(url, files=files)
+
+        if response.status_code != 200:
+            raise ConnectionError(f"HTTP upload failed with status code: {response.status_code}")
+        result = response.json()
+        if result.get("status") == "ok":
+            send_text(f"File too large for Telegram; download from:\n{result['data']['downloadPage']}")
+        else:
+            raise ConnectionError(f"GoFile error: {result.get('status')}")
     except Exception as e:
-        print(f"[Transfer.sh] Error encountered: {e}")
+        print(f"[GoFile] Error encountered: {e}")
+        print(e.stacktrace())
 
 def main():
     """Continuously monitor the clipboard and sync new content to Telegram.
